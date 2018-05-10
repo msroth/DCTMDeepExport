@@ -5,7 +5,7 @@ dm_document objects to export are designated by indicating a folder in the deepe
  
 The content will be exported in its native format and named according to its object_name with an extension based upon its a_content_type. Duplicate file names will be appended with a counter (i.e., they will not be overwritten).
 
- * NO METADATA IS EXPORTED *
+ * NO METADATA IS EXPORTED
  
 If you need to export metadata with the content, please see my QuikDIE application: https://msroth.wordpress.com/2015/03/26/documentum-bulk-export-tool-v1-4/
  
