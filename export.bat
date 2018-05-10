@@ -19,7 +19,7 @@ goto end
 
 REM run Export
 :run_export
-java -classpath "%CLASSPATH%;%CONFIG_DIR;dist/DCTMDeepExport.jar;lib/DCTMBasics.jar" com.dm_misc.deepexport.DeepExport
+java -classpath "%CLASSPATH%;%CONFIG_DIR%;dist/DCTMDeepExport.jar;lib/DCTMBasics.jar" com.dm_misc.deepexport.DeepExport %1% 
 
 :end
 echo.

@@ -437,7 +437,7 @@ public class DeepExport {
 		System.out.println("export.target");
 		System.out.println();
 		System.out.println("In addition, two command line parameters are accepted:");
-		System.out.println("-version will export all versions of all documents found");
+		System.out.println("-versions will export all versions of all documents found");
 		System.out.println("-help will display this screen");
 		System.out.println();
 	}
