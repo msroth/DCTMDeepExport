@@ -16,11 +16,13 @@ https://msroth.wordpress.com/2015/03/26/documentum-bulk-export-tool-v1-4/
    -help    : display a brief help screen
  
  Sample deepexport.properties file:
+   <pre>
    docbase.name=repo1
    docbase.user=dmadmin
    docbase.password=dmadmin
    export.source=/Temp
    export.target=c:/temp/export
+   </pre>
  
  A clear text password will be encrypted and rewritten to the properties file after the first run of the DeepExport application.
  
