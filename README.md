@@ -11,8 +11,8 @@ Duplicate file names will be appended with a counter (i.e., they will not be ove
 If you need to export metadata with the content, please see my QuikDIE application:
 https://msroth.wordpress.com/2015/03/26/documentum-bulk-export-tool-v1-4/
  
- DeepExport can be invoke using two command line switches:
-   -versions : export all versions of documents
+ DeepExport can be invoke using two command line switches:<br/>
+   -versions : export all versions of documents<br/>
    -help    : display a brief help screen
  
  Sample deepexport.properties file:
