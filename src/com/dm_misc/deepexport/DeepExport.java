@@ -2,7 +2,7 @@ package com.dm_misc.deepexport;
 
 /* ============================================================================
  * DeepExport
- * (c) 2015 MS Roth
+ * (c) 2015 - 2019 MSRoth
  * 
  * This application will export content from a Documentum repository and 
  * replicate the repository file structure on your hard drive.  Objects to 
@@ -42,6 +42,9 @@ package com.dm_misc.deepexport;
  *                    - updated code to use DCTMBasics v1.3
  *                    - refactored code to remove Utils class
  *                    - added password encryption/decryption
+ *   1.2 - 2019-09-12 - updated copyright
+ *                    - corrected initial document count if using versions
+ *                    - a little refactoring
  *   
  */   
 
@@ -81,16 +84,16 @@ public class DeepExport {
 	private final String PROPERTIES_FILE = "deepexport.properties";
 	private final String PASSWORD_PREFIX = "DM_ENCR_TEXT=";
 
-	private Properties exportProps;
-	private static IDfSession session;
-	private boolean useVersions = false;
-	private boolean useHelp = false;
-	private int foldersExported = 0;
-	private int filesExported = 0;
-	private PrintWriter log;
-	private String logstub = "DCTMDeepExport_%s.log";
+	private Properties m_exportProps;
+	private static IDfSession m_session;
+	private boolean m_useVersions = false;
+	private boolean m_useHelp = false;
+	private int m_foldersExported = 0;
+	private int m_filesExported = 0;
+	private PrintWriter m_log;
+	private String m_logstub = "DCTMDeepExport_%s.log";
 
-	private static String VERSION = "1.1";
+	private static String VERSION = "1.2";
 
 	public static void main(String[] args) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd-HH:mm:ss");
@@ -101,7 +104,7 @@ public class DeepExport {
 
 			// get current time and print harness header
 			System.out.println("===== Start Documentum Deep Export v" + VERSION + " " + sdf.format(new Date()) + " =====");
-			System.out.println("(C) 2015 MSRoth - msroth.wordpress.com");
+			System.out.println("(C) 2015-2019 MSRoth - msroth.wordpress.com");
 			System.out.println();
 			startTime = System.currentTimeMillis();
 
@@ -115,8 +118,8 @@ public class DeepExport {
 			System.out.println("ERROR: " + e.getMessage());
 			//e.printStackTrace();
 		}  finally {
-			if (session != null)
-				session.getSessionManager().release(session);
+			if (m_session != null)
+				m_session.getSessionManager().release(m_session);
 
 			// get current time and print harness footer
 			System.out.println();
@@ -136,23 +139,23 @@ public class DeepExport {
 		File basePath;
 
 		// read properties file
-		exportProps = readPropertiesFile(PROPERTIES_FILE);
+		m_exportProps = readPropertiesFile(PROPERTIES_FILE);
 
 		// encrypt/decrypt password if it needs it
 		checkPasswordEncryption();
 
 		// add default properties
-		exportProps.put(HELP_KEY, "false");
-		exportProps.put(USE_VERSIONS_KEY, "false");
+		m_exportProps.put(HELP_KEY, "false");
+		m_exportProps.put(USE_VERSIONS_KEY, "false");
 
 		// get args
-		exportProps.putAll(getArgs(args));
+		m_exportProps.putAll(getArgs(args));
 
 		// get boolean switches
-		useHelp = Boolean.parseBoolean(exportProps.getProperty(HELP_KEY));
-		useVersions = Boolean.parseBoolean(exportProps.getProperty(USE_VERSIONS_KEY));
+		m_useHelp = Boolean.parseBoolean(m_exportProps.getProperty(HELP_KEY));
+		m_useVersions = Boolean.parseBoolean(m_exportProps.getProperty(USE_VERSIONS_KEY));
 
-		if (useHelp) {
+		if (m_useHelp) {
 			printUsage();
 		} else {
 
@@ -161,68 +164,73 @@ public class DeepExport {
 
 				// log on
 				System.out.print("Logging onto Documentum...");
-				session = DCTMBasics.logon(exportProps.getProperty(DOCBASE_KEY), 
-						exportProps.getProperty(USERNAME_KEY), 
-						exportProps.getProperty(PASSWORD_KEY));
+				m_session = DCTMBasics.logon(m_exportProps.getProperty(DOCBASE_KEY), 
+						m_exportProps.getProperty(USERNAME_KEY), 
+						m_exportProps.getProperty(PASSWORD_KEY));
 
-				if (session != null) {
-					System.out.println("Success (" + exportProps.getProperty(USERNAME_KEY)+ "@" + exportProps.getProperty(DOCBASE_KEY)+ ")");
+				if (m_session != null) {
+					System.out.println("Success (" + m_exportProps.getProperty(USERNAME_KEY)+ "@" + m_exportProps.getProperty(DOCBASE_KEY)+ ")");
 					System.out.println();
 
 					// ensure EXPORT_PATH_KEY exists
-					basePath = new File(trimTrailingSlash(exportProps.getProperty(EXPORT_PATH_KEY)));
+					basePath = new File(trimTrailingSlash(m_exportProps.getProperty(EXPORT_PATH_KEY)));
 					if (! basePath.exists())
-						throw new DfException("Export path " + exportProps.getProperty(EXPORT_PATH_KEY) + " does not exist.");
+						throw new DfException("Export path " + m_exportProps.getProperty(EXPORT_PATH_KEY) + " does not exist.");
 					if (! basePath.isDirectory())
-						throw new DfException("Export path " + exportProps.getProperty(EXPORT_PATH_KEY) + " is not a folder.");
+						throw new DfException("Export path " + m_exportProps.getProperty(EXPORT_PATH_KEY) + " is not a folder.");
 
 					// open log file
-					log = openLogFile(exportProps.getProperty(EXPORT_PATH_KEY), logstub);
+					m_log = openLogFile(m_exportProps.getProperty(EXPORT_PATH_KEY), m_logstub);
 
 					// print base export path
-					System.out.println("Export target path = " + trimTrailingSlash(exportProps.getProperty(EXPORT_PATH_KEY)));
-					log.println("Export target path = " + trimTrailingSlash(exportProps.getProperty(EXPORT_PATH_KEY)));
+					System.out.println("Export target path = " + trimTrailingSlash(m_exportProps.getProperty(EXPORT_PATH_KEY)));
+					m_log.println("Export target path = " + trimTrailingSlash(m_exportProps.getProperty(EXPORT_PATH_KEY)));
 
 					// ensure SOURCE_PATH_KEY exists
-					query = "select count(*) as _cnt from dm_folder where any r_folder_path = '" + trimTrailingSlash(exportProps.getProperty(SOURCE_PATH_KEY)) + "'";
-					//int fnd = Utils.runSingleValueQuery(query, "_cnt", session);
-					int fnd = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, session));
+					query = "select count(*) as _cnt from dm_folder where any r_folder_path = '" + trimTrailingSlash(m_exportProps.getProperty(SOURCE_PATH_KEY)) + "'";
+					int fnd = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, m_session));
 					if (fnd < 1)
-						throw new DfException("Source path " + exportProps.getProperty(SOURCE_PATH_KEY) + " does not exist in repository.");
+						throw new DfException("Source path " + m_exportProps.getProperty(SOURCE_PATH_KEY) + " does not exist in repository.");
 
 					// print export source path
-					System.out.println("Export source path = " + trimTrailingSlash(exportProps.getProperty(SOURCE_PATH_KEY)));
-					log.println("Export source path = " + trimTrailingSlash(exportProps.getProperty(SOURCE_PATH_KEY)));
+					System.out.println("Export source path = " + trimTrailingSlash(m_exportProps.getProperty(SOURCE_PATH_KEY)));
+					m_log.println("Export source path = " + trimTrailingSlash(m_exportProps.getProperty(SOURCE_PATH_KEY)));
 
 					// count export folders
-					query = "select count(*) as _cnt from dm_folder where folder('" + exportProps.getProperty(SOURCE_PATH_KEY) + "',descend)";
-					//folders_found = Utils.runSingleValueQuery(query, "_cnt", session);
-					folders_found = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, session));
+					query = "select count(*) as _cnt from dm_folder where folder('" + m_exportProps.getProperty(SOURCE_PATH_KEY) + "',descend)";
+					folders_found = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, m_session));
 
-					// count export documents
-					query = "select count(*) as _cnt from dm_document d where folder('" + exportProps.getProperty(SOURCE_PATH_KEY) + "',descend) and r_full_content_size > 0";
-					//documents_found = Utils.runSingleValueQuery(query, "_cnt", session);
-					documents_found = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, session));
-
+					// count export documents with versions
+					if (m_useVersions) {
+						query = "select count(*) as _cnt from dm_document (ALL) where folder('" + m_exportProps.getProperty(SOURCE_PATH_KEY) + "',descend) and r_full_content_size > 0";
+						documents_found = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, m_session));
+					} else {
+						// count export documents without
+						query = "select count(*) as _cnt from dm_document where folder('" + m_exportProps.getProperty(SOURCE_PATH_KEY) + "',descend) and r_full_content_size > 0";
+						documents_found = Integer.parseInt(DCTMBasics.runDQLQueryReturnSingleValue(query, m_session));
+					}
+					
 					// print expected totals
-					System.out.println("Found " + folders_found + " folders to export");
-					System.out.println("Found " + documents_found + " documents to export");
-					log.println("Found " + folders_found + " folders to export");
-					log.println("Found " + documents_found + " documents to export");
+					System.out.println("Found " + folders_found + " sub folders to export");
+					System.out.println("Found " + documents_found + " documents to export\n");
+					m_log.println("Found " + folders_found + " sub folders to export");
+					m_log.println("Found " + documents_found + " documents to export\n");
 
-					// call export method 
-					IDfFolder folder = (IDfFolder) session.getObjectByQualification("dm_folder where any r_folder_path = '" + exportProps.getProperty(SOURCE_PATH_KEY) + "'");
+					// *** call export method *** 
+					System.out.println("Exporting Folder: " + m_exportProps.getProperty(SOURCE_PATH_KEY));
+					m_log.println("Exporting Folder: " + m_exportProps.getProperty(SOURCE_PATH_KEY));
+					IDfFolder folder = (IDfFolder) m_session.getObjectByQualification("dm_folder where any r_folder_path = '" + m_exportProps.getProperty(SOURCE_PATH_KEY) + "'");
 					exportFolder(folder);
 
 					// print actual totals
 					System.out.println();
-					System.out.println("Folders processed: " + foldersExported);
-					System.out.println("Documents processed: " + filesExported);
-					log.println("Folders processed: " + foldersExported);
-					log.println("Documents processed: " + filesExported);
+					System.out.println("\nFolders processed: " + m_foldersExported);
+					System.out.println("Documents processed: " + m_filesExported);
+					m_log.println("\nFolders processed: " + m_foldersExported);
+					m_log.println("Documents processed: " + m_filesExported);
 
 				} else {
-					System.out.println("Failed. (" + exportProps.getProperty(USERNAME_KEY)+ "@" + exportProps.getProperty(DOCBASE_KEY)+ ")");
+					System.out.println("Failed. (" + m_exportProps.getProperty(USERNAME_KEY)+ "@" + m_exportProps.getProperty(DOCBASE_KEY)+ ")");
 				}
 			} else {
 				System.out.println("Invalid properties or arguments.");
@@ -230,36 +238,37 @@ public class DeepExport {
 			}
 		}
 		// close the log file
-		if (log != null) {
-			log.println("End Documentum Deep Export");
-			log.close();
+		if (m_log != null) {
+			m_log.println("End Documentum Deep Export");
+			m_log.close();
 		}
 	}
 
+	
 	private void exportFolder(IDfFolder folder) throws DfException {
-
+		
 		// create this folder on the target file system
-		String exportPath = createFolderOnFileSystem(exportProps.getProperty(EXPORT_PATH_KEY), folder.getFolderPath(0));
+		String exportPath = createFolderOnFileSystem(m_exportProps.getProperty(EXPORT_PATH_KEY), folder.getFolderPath(0));
 
 		// build query to get sysobjects in this folder
 		String query = "select r_object_id from dm_sysobject ";
-		if (useVersions)
+		if (m_useVersions)
 			query += "(ALL) ";
 		query += " where folder(id('" + folder.getObjectId().toString() + "'))";
 
 		// run query
-		IDfCollection col = DCTMBasics.runSelectQuery(query, session);
-
+		IDfCollection col = DCTMBasics.runSelectQuery(query, m_session);
+		
 		// process query
 		while (col.next()) {
-			IDfSysObject sObj = (IDfSysObject) session.getObject(col.getId("r_object_id"));
+			IDfSysObject sObj = (IDfSysObject) m_session.getObject(col.getId("r_object_id"));
 
 			// if it is a folder set up for recursive call
 			if (DCTMBasics.isFolder(sObj)) {
 				IDfFolder f = (IDfFolder) sObj;
 				System.out.println("Exporting Folder: " + f.getFolderPath(0));
-				log.println("Exporting Folder: " + f.getFolderPath(0));
-				foldersExported++;
+				m_log.println("Exporting Folder: " + f.getFolderPath(0));
+				m_foldersExported++;
 
 				// recursive call with new found folder
 				exportFolder(f);
@@ -272,32 +281,35 @@ public class DeepExport {
 					// make sure it has content
 					if (DCTMBasics.hasContent((IDfDocument) sObj)) {
 
+						// check if doc parked on BOCS
 						IDfId contId = sObj.getContentsId();
 						if (contId.isObjectId()) {
-							IDfTypedObject tObj = (IDfTypedObject) session.getObject(contId);
+							IDfTypedObject tObj = (IDfTypedObject) m_session.getObject(contId);
 							if (tObj != null) {
 								int parked = tObj.getInt("i_parked_state");  
 								if (parked == 0) {
 
-									// if it is a doc with content and not parked, export it
+									// *** if it is a doc with content and not parked, export it ***
 									exportContentToFileSystem(exportPath, (IDfDocument) sObj);
+
 								} else {
-									log.println("\tObject is parked -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
+									m_log.println("\tObject is parked -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
 								}
 							} else {
-								log.println("\tCannot get associated dmr_content object -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
+								m_log.println("\tCannot get associated dmr_content object -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
 							}
 						} else {
-							log.println("\tObject has no associate dmr_content object -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
+							m_log.println("\tObject has no associate dmr_content object -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
 						}
 					} else {
-						log.println("\tNo content -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
+						m_log.println("\tNo content -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
 					}
 				} else {
-					log.println("\tNot a document -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
+					m_log.println("\tNot a document -- skipping " + sObj.getObjectName() + "\t(" + sObj.getObjectId().toString() + ")");
 				}
 			}
 		}
+	
 		col.close();
 	}
 
@@ -309,11 +321,11 @@ public class DeepExport {
 		String fullFileName = "";
 
 		try {
-			filesExported++;
+			m_filesExported++;
 			filename = sanitizeFileName(doc.getObjectName());
 
 			// account for version
-			if (useVersions) {
+			if (m_useVersions) {
 				version = doc.getVersionLabels().getImplicitVersionLabel();
 				version = "-v" + version;
 			}
@@ -340,9 +352,10 @@ public class DeepExport {
 				}	
 			}
 
-			// export the document to the constructed file name and path
+			// *** export the document to the constructed file name and path ***
 			doc.getFile(fullFileName);
-			log.println("\tExporting " + doc.getObjectName() +  "\t--> " + fullFileName + "\t(" + doc.getObjectId().toString() + ")");
+			System.out.println("\tExporting Document: " + doc.getObjectName() +  " [" + doc.getObjectId().toString() + "]");
+			m_log.println("\tExporting Document: " + doc.getObjectName() +  " [" + doc.getObjectId().toString() + "]\t--> " + fullFileName);
 
 		} catch (DfException dfe) {
 			System.out.println("ERROR: Could not export " + fullFileName + " - " + dfe.getMessage());
@@ -371,22 +384,22 @@ public class DeepExport {
 	private boolean validateProperties() {
 		boolean valid = true;
 
-		if (!exportProps.containsKey(DOCBASE_KEY) ||
-				!exportProps.containsKey(USERNAME_KEY) ||
-				!exportProps.containsKey(PASSWORD_KEY) ||
-				!exportProps.containsKey(SOURCE_PATH_KEY) ||
-				!exportProps.containsKey(EXPORT_PATH_KEY) ||
-				!exportProps.containsKey(HELP_KEY) ||
-				!exportProps.containsKey(USE_VERSIONS_KEY))
+		if (!m_exportProps.containsKey(DOCBASE_KEY) ||
+				!m_exportProps.containsKey(USERNAME_KEY) ||
+				!m_exportProps.containsKey(PASSWORD_KEY) ||
+				!m_exportProps.containsKey(SOURCE_PATH_KEY) ||
+				!m_exportProps.containsKey(EXPORT_PATH_KEY) ||
+				!m_exportProps.containsKey(HELP_KEY) ||
+				!m_exportProps.containsKey(USE_VERSIONS_KEY))
 			valid = false;
 		if (valid) {
-			if (exportProps.getProperty(DOCBASE_KEY).trim().isEmpty() || 
-					exportProps.getProperty(USERNAME_KEY).trim().isEmpty() ||	
-					exportProps.getProperty(PASSWORD_KEY).trim().isEmpty() ||
-					exportProps.getProperty(SOURCE_PATH_KEY).trim().isEmpty() ||
-					exportProps.getProperty(EXPORT_PATH_KEY).trim().isEmpty() || 
-					exportProps.getProperty(HELP_KEY).trim().isEmpty() ||
-					exportProps.getProperty(USE_VERSIONS_KEY).trim().isEmpty())
+			if (m_exportProps.getProperty(DOCBASE_KEY).trim().isEmpty() || 
+					m_exportProps.getProperty(USERNAME_KEY).trim().isEmpty() ||	
+					m_exportProps.getProperty(PASSWORD_KEY).trim().isEmpty() ||
+					m_exportProps.getProperty(SOURCE_PATH_KEY).trim().isEmpty() ||
+					m_exportProps.getProperty(EXPORT_PATH_KEY).trim().isEmpty() || 
+					m_exportProps.getProperty(HELP_KEY).trim().isEmpty() ||
+					m_exportProps.getProperty(USE_VERSIONS_KEY).trim().isEmpty())
 				valid = false;
 		}
 		return valid;	
@@ -495,7 +508,7 @@ public class DeepExport {
 			// if password not encrypted in property file, encrypt it and save
 			// it back to the property file.  Leave it un-encrypted in properties
 			// hash
-			String password = exportProps.getProperty(PASSWORD_KEY);
+			String password = m_exportProps.getProperty(PASSWORD_KEY);
 			if (!password.startsWith(PASSWORD_PREFIX)) {
 
 				//write to property file
@@ -506,7 +519,7 @@ public class DeepExport {
 			password = password.substring(PASSWORD_PREFIX.length());
 			password = password.replace("\\", "");
 			String newPassword = RegistryPasswordUtils.decrypt(password);
-			exportProps.setProperty(PASSWORD_KEY, newPassword);
+			m_exportProps.setProperty(PASSWORD_KEY, newPassword);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -519,14 +532,14 @@ public class DeepExport {
 		try {
 
 			// encrypt password
-			newPassword = PASSWORD_PREFIX + RegistryPasswordUtils.encrypt(exportProps.getProperty(PASSWORD_KEY));
+			newPassword = PASSWORD_PREFIX + RegistryPasswordUtils.encrypt(m_exportProps.getProperty(PASSWORD_KEY));
 			newPassword = newPassword.replace("\\", "");
 
 			// this assumes the property file is in the current dir
 			File file = new File(PROPERTIES_FILE);
-			exportProps.setProperty(PASSWORD_KEY, newPassword);
+			m_exportProps.setProperty(PASSWORD_KEY, newPassword);
 			OutputStream out = new FileOutputStream(file);
-			exportProps.store(out, "");
+			m_exportProps.store(out, "");
 
 		} catch (Exception e) {
 			System.out.println("\tWARNING:  unable to write encrypted password to property file " + e.getMessage());
