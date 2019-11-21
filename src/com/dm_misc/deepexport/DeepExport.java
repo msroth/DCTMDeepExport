@@ -45,6 +45,8 @@ package com.dm_misc.deepexport;
  *   1.2 - 2019-09-12 - updated copyright
  *                    - corrected initial document count if using versions
  *                    - a little refactoring
+ *   1.3 - 2019-11-21 - implemented dmRecordSet to avoid hitting IDfCollection
+ *                      max
  *   
  */   
 
@@ -60,6 +62,8 @@ import java.util.Date;
 import java.util.Properties;
 
 import com.dm_misc.dctm.DCTMBasics;
+import com.dm_misc.collections.dmRecordSet;
+
 import com.documentum.fc.client.IDfCollection;
 import com.documentum.fc.client.IDfDocument;
 import com.documentum.fc.client.IDfFolder;
@@ -93,7 +97,7 @@ public class DeepExport {
 	private PrintWriter m_log;
 	private String m_logstub = "DCTMDeepExport_%s.log";
 
-	private static String VERSION = "1.2";
+	private static String VERSION = "1.3";
 
 	public static void main(String[] args) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy.MM.dd-HH:mm:ss");
@@ -132,7 +136,7 @@ public class DeepExport {
 	public DeepExport() {
 	}
 
-	private void run(String[] args) throws DfException {
+	private void run(String[] args) throws Exception {
 		int folders_found = 0;
 		int documents_found = 0;
 		String query = "";
@@ -245,7 +249,7 @@ public class DeepExport {
 	}
 
 	
-	private void exportFolder(IDfFolder folder) throws DfException {
+	private void exportFolder(IDfFolder folder) throws Exception {
 		
 		// create this folder on the target file system
 		String exportPath = createFolderOnFileSystem(m_exportProps.getProperty(EXPORT_PATH_KEY), folder.getFolderPath(0));
@@ -258,10 +262,15 @@ public class DeepExport {
 
 		// run query
 		IDfCollection col = DCTMBasics.runSelectQuery(query, m_session);
+		// --v1.3
+		dmRecordSet dmRS = new dmRecordSet(col);
+		col.close();
 		
 		// process query
-		while (col.next()) {
-			IDfSysObject sObj = (IDfSysObject) m_session.getObject(col.getId("r_object_id"));
+		while (dmRS.hasNext()) {
+			// -- v1.3
+			IDfTypedObject rsTobj = dmRS.getNextRow();
+			IDfSysObject sObj = (IDfSysObject) m_session.getObject(rsTobj.getId("r_object_id"));
 
 			// if it is a folder set up for recursive call
 			if (DCTMBasics.isFolder(sObj)) {
@@ -309,8 +318,6 @@ public class DeepExport {
 				}
 			}
 		}
-	
-		col.close();
 	}
 
 
