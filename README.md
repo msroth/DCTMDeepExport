@@ -1,4 +1,7 @@
 # DCTMDeepExport
+
+__Note:  version 1.3 (using dmRecordSets) has not been thoroughly tested.__
+
 This application will export content (only) from a Documentum repository and replicate the repository file structure on your hard drive. 
 
 dm_document objects to export are designated by indicating a folder in the deepexport.properties file.
@@ -11,7 +14,7 @@ Duplicate file names will be appended with a counter (i.e., they will not be ove
 If you need to export metadata with the content, please see my QuikDIE application:
 https://msroth.wordpress.com/2015/03/26/documentum-bulk-export-tool-v1-4/
  
- DeepExport can be invoke using two command line switches:<br/>
+ DeepExport can be invoked using two command line switches:<br/>
    -versions : export all versions of documents<br/>
    -help    : display a brief help screen
  
